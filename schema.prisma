@@ -1,0 +1,120 @@
+// datasource db defines the database connection settings.
+// It is configured for PostgreSQL and uses an environment variable for the connection URL.
+// The 'extensions' feature enables the use of PostgreSQL-specific data types.
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+}
+
+// generator db configures Prisma Client settings.
+// It is set up to use Prisma Client Python with asyncio interface and specific features.
+generator db {
+  provider                    = "prisma-client-py"
+  interface                   = "asyncio"
+  recursive_type_depth        = 5
+  previewFeatures             = ["postgresqlExtensions"]
+  enable_experimental_decimal = true
+}
+
+model User {
+  id               String            @id @default(dbgenerated("gen_random_uuid()"))
+  email            String            @unique
+  hashedPassword   String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  role             Role
+  CrawlingSessions CrawlingSession[]
+  Searches         Search[]
+  APIKeys          APIKey[]
+}
+
+model Module {
+  id          String    @id @default(dbgenerated("gen_random_uuid()"))
+  name        String
+  description String
+  enabled     Boolean   @default(true)
+  Features    Feature[]
+}
+
+model Feature {
+  id            String @id @default(dbgenerated("gen_random_uuid()"))
+  name          String
+  functionality String
+  reasoning     String
+  module        Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  moduleId      String
+}
+
+model CrawlingSession {
+  id          String        @id @default(dbgenerated("gen_random_uuid()"))
+  startTime   DateTime      @default(now())
+  endTime     DateTime?
+  status      String // "active", "completed", "failed", etc.
+  logsPath    String
+  user        User          @relation(fields: [userId], references: [id])
+  userId      String
+  CrawledData CrawledData[]
+}
+
+model CrawledData {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()"))
+  data               Json
+  compressionType    String?
+  crawledSession     CrawlingSession  @relation(fields: [crawlingSessionId], references: [id], onDelete: Cascade)
+  crawlingSessionId  String
+  ArchivedResource   ArchivedResource @relation(fields: [archivedResourceId], references: [id], onDelete: Cascade)
+  archivedResourceId String
+}
+
+model ArchivedResource {
+  id          String        @id @default(dbgenerated("gen_random_uuid()"))
+  resourceUrl String
+  data        Json
+  createdAt   DateTime      @default(now())
+  CrawledData CrawledData[]
+}
+
+model Search {
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
+  query     String
+  createdAt DateTime @default(now())
+  results   Json
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+}
+
+model APIKey {
+  id          String   @id @default(dbgenerated("gen_random_uuid()"))
+  key         String   @unique
+  permissions String[]
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+}
+
+model Backup {
+  id              String      @id @default(dbgenerated("gen_random_uuid()"))
+  timestamp       DateTime    @default(now())
+  dataPath        String
+  status          String // "success", "partial", "failed"
+  size            Int // size in kilobytes
+  CompressionType String?
+  BackupLogs      BackupLog[]
+}
+
+model BackupLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
+  log       String
+  createdAt DateTime @default(now())
+  backup    Backup   @relation(fields: [backupId], references: [id])
+  backupId  String
+}
+
+enum Role {
+  SYSTEM_ADMINISTRATOR
+  DATA_MANAGER
+  USER
+  DEVELOPER
+  BACKUP_OPERATOR
+}
+
